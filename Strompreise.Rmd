@@ -1,0 +1,61 @@
+---
+title: "Strompreise"
+output: html_notebook
+---
+Load the libraries.
+```{r message=FALSE}
+library(RSNNS)
+```
+
+Read the data.
+```{r}
+s <- read.csv("Strompreise.csv")
+```
+
+Normalize the data using the RSNNS library.
+Definitely omit column DatumUhrzeit as it is the redundant, combined, badly-analyzable value of other columns.
+Consider omitting column Jahr as it is the same for every value.
+Wochentag is first mapped to values 1-7 using as.numeric and then normalized by RSNNS.
+We should optimally convert the data frame to a matrix, normalize it and convert it back to a data frame. But I was not able to do so, so this is the workaround.
+```{r}
+# Normalize every column.
+n = NULL
+n$Jahresstunde <- normalizeData(s$Jahresstunde)
+# n$Jahr <- normalizeDate(s$Jahr)
+n$Monat <- normalizeData(s$Monat)
+n$Tag <- normalizeData(s$Tag)
+n$Stunde <- normalizeData(s$Stunde)
+n$Woche <- normalizeData(s$Woche)
+n$Wochentag <- normalizeData(as.numeric(s$Wochentag))
+n$Temperatur <- normalizeData(s$Temperatur)
+n$Bedeckung <- normalizeData(s$Bedeckung)
+n$Windgeschwindigkeit <- normalizeData(s$Windgeschwindigkeit)
+n$Globalstrahlung <- normalizeData(s$Globalstrahlung)
+n$Strompreis <- normalizeData(s$Strompreis)
+# Bind columns to matrix.
+c <- cbind(n$Jahresstunde, n$Monat, n$Tag, n$Stunde, n$Woche, n$Wochentag, n$Temperatur, n$Bedeckung, n$Windgeschwindigkeit, n$Globalstrahlung, n$Strompreis)
+# Covert matrix to data frame.
+d <- as.data.frame(c, col.names=tmp)
+# Rename columns.
+colnames(d) <- c("Jahresstunde", "Monat", "Tag", "Stunde", "Woche", "Wochentag", "Temperatur", "Bedeckung", "Windgeschwindigkeit", "Globalstrahlung", "Strompreis")
+```
+
+Denormalize the column Strompreis of the data frame utilizing the norm parameters of the large list using RSNNS.
+```{r}
+o <- denormalizeData(d$Strompreis, getNormParameters(n$Strompreis))
+```
+
+Print the output.
+```{r}
+str(o)
+# o
+```
+
+Clean up.
+```{r message=FALSE}
+remove(s)
+remove(n)
+remove(c)
+remove(d)
+remove(o)
+```

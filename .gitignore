@@ -31,3 +31,9 @@ vignettes/*.pdf
 # Temporary files created by R markdown
 *.utf8.md
 *.knit.md
+
+# Rmd output.
+*.html
+
+# Data probably may not be published.
+*.csv
