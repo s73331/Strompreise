@@ -1,6 +1,8 @@
 ---
 title: "Strompreise"
-output: html_notebook
+output:
+  html_notebook: default
+  pdf_document: default
 ---
 Load the libraries.
 ```{r message=FALSE}
@@ -9,53 +11,106 @@ library(RSNNS)
 
 Read the data.
 ```{r}
-s <- read.csv("Strompreise.csv")
+strompreise <- read.csv("Strompreise.csv")
 ```
 
 Normalize the data using the RSNNS library.
-Definitely omit column DatumUhrzeit as it is the redundant, combined, badly-analyzable value of other columns.
+
+Definitely omit column DatumUhrzeit as it is a redundant, combined, badly-analyzable value of the other columns.
+
 Consider omitting column Jahr as it is the same for every value.
-Wochentag is first mapped to values 1-7 using as.numeric and then normalized by RSNNS.
+
+Wochentag is first mapped to values 1-7 using as.numeric and then normalized by RSNNS. The fact, that we can't control which day 1 will be, has no effect, as the denormalization will result in the corresponding day again.
+
 We should optimally convert the data frame to a matrix, normalize it and convert it back to a data frame. But I was not able to do so, so this is the workaround.
 ```{r}
 # Normalize every column.
-n = NULL
-n$Jahresstunde <- normalizeData(s$Jahresstunde)
+normalized = NULL
+normalized$Jahresstunde <- normalizeData(strompreise$Jahresstunde)
 # n$Jahr <- normalizeDate(s$Jahr)
-n$Monat <- normalizeData(s$Monat)
-n$Tag <- normalizeData(s$Tag)
-n$Stunde <- normalizeData(s$Stunde)
-n$Woche <- normalizeData(s$Woche)
-n$Wochentag <- normalizeData(as.numeric(s$Wochentag))
-n$Temperatur <- normalizeData(s$Temperatur)
-n$Bedeckung <- normalizeData(s$Bedeckung)
-n$Windgeschwindigkeit <- normalizeData(s$Windgeschwindigkeit)
-n$Globalstrahlung <- normalizeData(s$Globalstrahlung)
-n$Strompreis <- normalizeData(s$Strompreis)
+normalized$Monat <- normalizeData(strompreise$Monat)
+normalized$Tag <- normalizeData(strompreise$Tag)
+normalized$Stunde <- normalizeData(strompreise$Stunde)
+normalized$Woche <- normalizeData(strompreise$Woche)
+normalized$Wochentag <- normalizeData(as.numeric(strompreise$Wochentag))
+normalized$Temperatur <- normalizeData(strompreise$Temperatur)
+normalized$Bedeckung <- normalizeData(strompreise$Bedeckung)
+normalized$Windgeschwindigkeit <- normalizeData(strompreise$Windgeschwindigkeit)
+normalized$Globalstrahlung <- normalizeData(strompreise$Globalstrahlung)
+normalized$Strompreis <- normalizeData(strompreise$Strompreis)
 # Bind columns to matrix.
-c <- cbind(n$Jahresstunde, n$Monat, n$Tag, n$Stunde, n$Woche, n$Wochentag, n$Temperatur, n$Bedeckung, n$Windgeschwindigkeit, n$Globalstrahlung, n$Strompreis)
+converted <- cbind(normalized$Jahresstunde, 
+                   normalized$Monat,
+                   normalized$Tag,
+                   normalized$Stunde,
+                   normalized$Woche,
+                   normalized$Wochentag,
+                   normalized$Temperatur,
+                   normalized$Bedeckung,
+                   normalized$Windgeschwindigkeit,
+                   normalized$Globalstrahlung,
+                   normalized$Strompreis)
 # Covert matrix to data frame.
-d <- as.data.frame(c, col.names=tmp)
+dataframe <- as.data.frame(converted)
 # Rename columns.
-colnames(d) <- c("Jahresstunde", "Monat", "Tag", "Stunde", "Woche", "Wochentag", "Temperatur", "Bedeckung", "Windgeschwindigkeit", "Globalstrahlung", "Strompreis")
+colnames(dataframe) <- c("Jahresstunde", "Monat", "Tag", "Stunde", "Woche", "Wochentag", "Temperatur", "Bedeckung", "Windgeschwindigkeit", "Globalstrahlung", "Strompreis")
+```
+
+Have a look at the dataframe.
+```{r}
+str(dataframe)
+```
+
+Split data to inputs and target.
+```{r}
+inputs <- dataframe
+inputs$Strompreis <- NULL
+targets <- dataframe$Strompreis
+```
+
+Split data for training and test.
+```{r}
+splitdata <- splitForTrainingAndTest(inputs, targets, ratio=0.01)
+```
+
+Fit the model. mlp allows to put test data in as well and will test the mlp itself. 
+
+Configure the size at your choice.
+```{r}
+model <- mlp(splitdata$inputsTrain,
+             splitdata$targetsTrain,
+             size=c(11,11,11),
+             inputsTest=splitdata$inputsTest,
+             targetsTest=splitdata$targetsTest)
 ```
 
 Denormalize the column Strompreis of the data frame utilizing the norm parameters of the large list using RSNNS.
 ```{r}
-o <- denormalizeData(d$Strompreis, getNormParameters(n$Strompreis))
+prediction <- denormalizeData(model$fittedTestValues,
+                              getNormParameters(normalized$Strompreis))
+realTest <- denormalizeData(splitdata$targetsTest,
+                            getNormParameters(normalized$Strompreis))
 ```
 
-Print the output.
+Analyse the result.
 ```{r}
-str(o)
-# o
+result <- cbind(prediction,realTest)
+result
+plot(result)
+cor.test(prediction, realTest, method="pearson")
 ```
 
 Clean up.
 ```{r message=FALSE}
-remove(s)
-remove(n)
-remove(c)
-remove(d)
-remove(o)
+remove(strompreise)
+remove(normalized)
+remove(converted)
+remove(dataframe)
+remove(inputs)
+remove(splitdata)
+remove(model)
+remove(prediction)
+remove(realTest)
+remove(targets)
+remove(result)
 ```
