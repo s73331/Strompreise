@@ -7,11 +7,23 @@ output:
 Load the libraries.
 ```{r message=FALSE}
 library(RSNNS)
+RSNNS::getSnnsRFunctionTable()
 ```
 
-Read the data.
+Read the data and add previous Strompreis.
 ```{r}
-strompreise <- read.csv("Strompreise.csv")
+strompreise <- read.csv("/home/david/work/r/strom/psbi/Daten/Strompreise.csv")
+prevPreis = strompreise$Strompreis[-8784]
+pprevPreis = prevPreis[-8783]
+prevPreis = prevPreis[-1]
+#prevPreis = prevPreis[-8783]
+#pprevPreis = strompreise$Strompreis[-]
+strompreise = strompreise[-1,]
+strompreise = strompreise[-1,]
+strompreise$prevPreis <- prevPreis
+strompreise$pprevPreis <- pprevPreis
+strompreise
+
 ```
 
 Normalize the data using the RSNNS library.
@@ -38,8 +50,10 @@ normalized$Bedeckung <- normalizeData(strompreise$Bedeckung)
 normalized$Windgeschwindigkeit <- normalizeData(strompreise$Windgeschwindigkeit)
 normalized$Globalstrahlung <- normalizeData(strompreise$Globalstrahlung)
 normalized$Strompreis <- normalizeData(strompreise$Strompreis)
+normalized$prevPreis <- normalizeData(strompreise$prevPreis)
+normalized$pprevPreis <- normalizeData(strompreise$pprevPreis)
 # Bind columns to matrix.
-converted <- cbind(normalized$Jahresstunde, 
+converted <- cbind(#normalized$Jahresstunde, 
                    normalized$Monat,
                    normalized$Tag,
                    normalized$Stunde,
@@ -49,11 +63,13 @@ converted <- cbind(normalized$Jahresstunde,
                    normalized$Bedeckung,
                    normalized$Windgeschwindigkeit,
                    normalized$Globalstrahlung,
-                   normalized$Strompreis)
+                   normalized$Strompreis,
+                   normalized$prevPreis,
+                   normalized$pprevPreis)
 # Covert matrix to data frame.
 dataframe <- as.data.frame(converted)
 # Rename columns.
-colnames(dataframe) <- c("Jahresstunde", "Monat", "Tag", "Stunde", "Woche", "Wochentag", "Temperatur", "Bedeckung", "Windgeschwindigkeit", "Globalstrahlung", "Strompreis")
+colnames(dataframe) <- c("Monat", "Tag", "Stunde", "Woche", "Wochentag", "Temperatur", "Bedeckung", "Windgeschwindigkeit", "Globalstrahlung", "Strompreis", "prevPreis", "pprevPreis")
 ```
 
 Have a look at the dataframe.
@@ -80,8 +96,12 @@ Configure the size at your choice.
 model <- mlp(splitdata$inputsTrain,
              splitdata$targetsTrain,
              size=c(11,11,11),
+             #maxit=5000,
+             #hiddenActFunc = "Act_Elliott",
              inputsTest=splitdata$inputsTest,
              targetsTest=splitdata$targetsTest)
+model
+plotIterativeError(model)
 ```
 
 Denormalize the column Strompreis of the data frame utilizing the norm parameters of the large list using RSNNS.
