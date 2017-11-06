@@ -15,13 +15,18 @@ Read the data and add previous Strompreis.
 strompreise <- read.csv("/home/david/work/r/strom/psbi/Daten/Strompreise.csv")
 prevPreis = strompreise$Strompreis[-8784]
 pprevPreis = prevPreis[-8783]
+ppprevPreis = pprevPreis[-8782]
 prevPreis = prevPreis[-1]
+prevPreis = prevPreis[-1]
+pprevPreis = pprevPreis[-1]
 #prevPreis = prevPreis[-8783]
 #pprevPreis = strompreise$Strompreis[-]
 strompreise = strompreise[-1,]
 strompreise = strompreise[-1,]
+strompreise = strompreise[-1,]
 strompreise$prevPreis <- prevPreis
 strompreise$pprevPreis <- pprevPreis
+strompreise$ppprevPreis <- ppprevPreis
 strompreise
 
 ```
@@ -40,36 +45,39 @@ We should optimally convert the data frame to a matrix, normalize it and convert
 normalized = NULL
 normalized$Jahresstunde <- normalizeData(strompreise$Jahresstunde)
 # n$Jahr <- normalizeDate(s$Jahr)
-normalized$Monat <- normalizeData(strompreise$Monat)
-normalized$Tag <- normalizeData(strompreise$Tag)
-normalized$Stunde <- normalizeData(strompreise$Stunde)
-normalized$Woche <- normalizeData(strompreise$Woche)
-normalized$Wochentag <- normalizeData(as.numeric(strompreise$Wochentag))
-normalized$Temperatur <- normalizeData(strompreise$Temperatur)
-normalized$Bedeckung <- normalizeData(strompreise$Bedeckung)
-normalized$Windgeschwindigkeit <- normalizeData(strompreise$Windgeschwindigkeit)
-normalized$Globalstrahlung <- normalizeData(strompreise$Globalstrahlung)
-normalized$Strompreis <- normalizeData(strompreise$Strompreis)
-normalized$prevPreis <- normalizeData(strompreise$prevPreis)
-normalized$pprevPreis <- normalizeData(strompreise$pprevPreis)
+normalized$Monat <- normalizeData(strompreise$Monat, type = "0_1")
+normalized$Tag <- normalizeData(strompreise$Tag, type = "0_1")
+normalized$Stunde <- normalizeData(strompreise$Stunde, type = "0_1")
+normalized$Woche <- normalizeData(strompreise$Woche, type = "0_1")
+normalized$Wochentag <- normalizeData(as.numeric(strompreise$Wochentag), type = "0_1")
+normalized$Temperatur <- normalizeData(strompreise$Temperatur, type = "0_1")
+normalized$Bedeckung <- normalizeData(strompreise$Bedeckung, type = "0_1")
+normalized$Windgeschwindigkeit <- normalizeData(strompreise$Windgeschwindigkeit, type = "0_1")
+normalized$Globalstrahlung <- normalizeData(strompreise$Globalstrahlung, type = "0_1")
+normalized$Strompreis <- normalizeData(strompreise$Strompreis, type = "0_1")
+normalized$prevPreis <- normalizeData(strompreise$prevPreis, type = "0_1")
+normalized$pprevPreis <- normalizeData(strompreise$pprevPreis, type = "0_1")
+normalized$ppprevPreis <- normalizeData(strompreise$ppprevPreis, type = "0_1")
 # Bind columns to matrix.
 converted <- cbind(#normalized$Jahresstunde, 
-                   normalized$Monat,
-                   normalized$Tag,
-                   normalized$Stunde,
-                   normalized$Woche,
-                   normalized$Wochentag,
+                   #normalized$Monat,
+                   #normalized$Tag,
+                   #normalized$Stunde,
+                   #normalized$Woche,
+                   #normalized$Wochentag,
                    normalized$Temperatur,
                    normalized$Bedeckung,
                    normalized$Windgeschwindigkeit,
                    normalized$Globalstrahlung,
                    normalized$Strompreis,
                    normalized$prevPreis,
-                   normalized$pprevPreis)
+                   normalized$pprevPreis,
+                   normalized$ppprevPreis)
 # Covert matrix to data frame.
 dataframe <- as.data.frame(converted)
 # Rename columns.
-colnames(dataframe) <- c("Monat", "Tag", "Stunde", "Woche", "Wochentag", "Temperatur", "Bedeckung", "Windgeschwindigkeit", "Globalstrahlung", "Strompreis", "prevPreis", "pprevPreis")
+#colnames(dataframe) <- c("Monat", "Tag", "Stunde", "Woche", "Wochentag", "Temperatur", "Bedeckung", "Windgeschwindigkeit", "Globalstrahlung", "Strompreis", "prevPreis", "pprevPreis")
+colnames(dataframe) <- c("Temperatur", "Bedeckung", "Windgeschwindigkeit", "Globalstrahlung","Strompreis", "prevPreis", "pprevPreis", "ppprevPreis")
 ```
 
 Have a look at the dataframe.
@@ -86,7 +94,7 @@ targets <- dataframe$Strompreis
 
 Split data for training and test.
 ```{r}
-splitdata <- splitForTrainingAndTest(inputs, targets, ratio=0.01)
+splitdata <- splitForTrainingAndTest(inputs, targets, ratio=0.5)
 ```
 
 Fit the model. mlp allows to put test data in as well and will test the mlp itself. 
@@ -95,13 +103,14 @@ Configure the size at your choice.
 ```{r}
 model <- mlp(splitdata$inputsTrain,
              splitdata$targetsTrain,
-             size=c(11,11,11),
-             #maxit=5000,
+             size=c(8,9,8,7),
+             maxit=3000,
              #hiddenActFunc = "Act_Elliott",
              inputsTest=splitdata$inputsTest,
              targetsTest=splitdata$targetsTest)
 model
 plotIterativeError(model)
+#plotRegressionError(model)
 ```
 
 Denormalize the column Strompreis of the data frame utilizing the norm parameters of the large list using RSNNS.
