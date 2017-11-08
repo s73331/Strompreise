@@ -37,3 +37,5 @@ vignettes/*.pdf
 
 # Data probably may not be published.
 *.csv
+*.ods
+*.xlsx
