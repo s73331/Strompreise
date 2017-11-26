@@ -4,15 +4,16 @@ output:
   html_notebook: default
   pdf_document: default
 ---
+# Strompreise
 ## Libraries
 ```{r message=FALSE}
 library(RSNNS)
 ```
 
-Read the data and add previous Strompreis.
+## File read, preprocess data
 ```{r}
-raw <- read.csv("Strompreise.csv")
-strompreise <- read.csv("Kopie von Wetterdaten_Strompreise_mehrere_Standorte.csv")
+raw <- read.csv("Kopie von Wetterdaten_Strompreise_mehrere_Standorte.csv")
+strompreise <- raw
 prevPreis = strompreise$Strompreis[-8784]
 pprevPreis = prevPreis[-8783]
 ppprevPreis = pprevPreis[-8782]
@@ -104,24 +105,97 @@ Configure the size at your choice.
 ```{r}
 model <- mlp(splitdata$inputsTrain,
              splitdata$targetsTrain,
-             size=c(13),
-             maxit=1000,
+             size=c(20),
+             maxit=100,
              #hiddenActFunc = "Act_Elliott",
              inputsTest=splitdata$inputsTest,
              targetsTest=splitdata$targetsTest)
 model
 plotIterativeError(model)
 #plotRegressionError(model)
+```
 
+## Prediction
+## 1h
+Taken from prefitted data.
+```{r}
 prediction <- denormalizeData(model$fittedTestValues,
                               getNormParameters(normalized$Strompreis))
 realTest <- denormalizeData(splitdata$targetsTest,
                             getNormParameters(normalized$Strompreis))
 result <- cbind(prediction,realTest)
+resultdiff <- prediction - realTest
 result
 plot(result)
+plot(resultdiff)
 
-sum(realTest^2 - prediction^2) / length(realTest)
+sum((realTest - prediction)^2) / length(realTest)
+```
+
+## Continous 24h
+```{r}
+continous24 <- as.data.frame(splitdata$inputsTest)
+continous24result <- NULL
+continous24result$real <- denormalizeData(splitdata$targetsTest,
+                                    getNormParameters(normalized$Strompreis))
+for(i in 1:24)
+{
+  raw_i <- paste("raw", i)
+  pred_i <- paste("pred", i)
+  result_i <- paste("result", i)
+  diff_i <- paste("diff", i)
+  abs_i <- paste("abs", i)
+  sum_i <- paste("sum", i)
+  continous24result[[pred_i]] <- denormalizeData(predict(model, continous24),
+                                        getNormParameters(normalized$Strompreis)) 
+  continous24result[[result_i]] <- cbind(continous24result[[pred_i]], continous24result$real)
+  continous24result[[diff_i]] <- continous24result$real - continous24result[[pred_i]]
+  continous24result[[abs_i]] <- abs(continous24result[[diff_i]])
+  continous24result[[sum_i]] <- sum(continous24result[[diff_i]]^2) / length(continous24result[[diff_i]])
+  continous24result[[result_i]]
+  #plot(continous24result[[pred_i]])
+  plot(continous24result[[result_i]])
+  #plot(continous24result[[diff_i]])
+  #plot(continous24result[[abs_i]])
+  
+  # Shift previous prices.
+  continous24$ppprevPreis <- continous24$pprevPreis
+  continous24$pprevPreis <- continous24$prevPreis
+  # IMPORTANT: denormalize output and normalize input, as different paramters might be used.
+  continous24$prevPreis <- normalizeData(continous24result[[pred_i]], getNormParameters(normalized$prevPreis))
+}
+```
+## Single 24h
+```{r}
+output24 <- NULL
+input24 <- splitdata$inputsTest
+
+start <- 0
+end <- 120
+input24 <- splitdata$inputsTest[start:(end+3),]
+for(i in 1:(end-start))
+{
+  output <- predict(model, input24[i,])
+  output24[i-start] <- output
+  input24[i+1,"prevPreis"] <- output
+  input24[i+2,"pprevPreis"] <- output
+  input24[i+3,"ppprevPreis"] <- output
+}
+
+prediction24 <- denormalizeData(output24,
+                                getNormParameters(normalized$Strompreis))
+
+realTest24 <- denormalizeData(splitdata$targetsTest[1:(end-start)],
+                              getNormParameters(normalized$Strompreis)) 
+result24 <- cbind(prediction24,realTest24)
+result24diff <- realTest24 - prediction24
+result24diffabs <- abs(result24diff)
+result24
+plot(result24)
+plot(result24diff)
+plot(result24diffabs)
+
+sum((realTest24 - prediction24)^2) / length(prediction24)
 ```
 
 Clean up.
