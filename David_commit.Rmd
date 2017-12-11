@@ -1,0 +1,217 @@
+---
+title: "Strompreise"
+output:
+  html_notebook: default
+  pdf_document: default
+---
+# Strompreise
+## Libraries
+```{r message=FALSE}
+library(RSNNS)
+```
+
+## File read, preprocess data
+```{r}
+raw <- read.csv("/home/david/Kopie von Wetterdaten_Strompreise_mehrere_Standorte.csv")
+strompreise <- raw
+prevPreis = strompreise$Strompreis[-8784]
+pprevPreis = prevPreis[-8783]
+ppprevPreis = pprevPreis[-8782]
+pppprevPreis = ppprevPreis[-8782]
+prevPreis = prevPreis[-1:-3]
+pprevPreis = pprevPreis[-1:-2]
+ppprevPreis = ppprevPreis[-1]
+strompreise = strompreise[-1:-4,]
+strompreise$prevPreis <- prevPreis
+strompreise$pprevPreis <- pprevPreis
+strompreise$ppprevPreis <- ppprevPreis
+strompreise$pppprevPreis <- pppprevPreis
+strompreise
+```
+## Normalization
+
+Normalize the data using the RSNNS library.
+
+Definitely omit column DatumUhrzeit as it is a redundant, combined, badly-analyzable value of the other columns.
+
+Consider omitting column Jahr as it is the same for every value.
+
+Wochentag is first mapped to values 1-7 using as.numeric and then normalized by RSNNS. The fact, that we can't control which day 1 will be, has no effect, as the denormalization will result in the corresponding day again.
+
+We should optimally convert the data frame to a matrix, normalize it and convert it back to a data frame. But I was not able to do so, so this is the workaround.
+```{r}
+# Normalize every column.
+normalized = NULL
+normalized$Jahresstunde <- normalizeData(strompreise$Jahresstunde)
+normalized$Jahr <- normalizeData(strompreise$Jahr)
+normalized$Monat <- normalizeData(strompreise$Monat, type = "0_1")
+normalized$Tag <- normalizeData(strompreise$Tag, type = "0_1")
+normalized$Stunde <- normalizeData(strompreise$Stunde, type = "0_1")
+# normalized$Woche <- normalizeData(strompreise$Woche, type = "0_1")
+# normalized$Wochentag <- normalizeData(as.numeric(strompreise$Wochentag), type = "0_1")
+normalized$D_Temperatur <- normalizeData(strompreise$D_Temperatur, type = "0_1")
+normalized$M_Temperatur <- normalizeData(strompreise$M_Temperatur, type = "0_1")
+normalized$S_Temperatur <- normalizeData(strompreise$S_Temperatur, type = "0_1")
+normalized$D_Bedeckung <- normalizeData(strompreise$D_Bedeckung, type = "0_1")
+normalized$M_Bedeckung <- normalizeData(strompreise$M_Bedeckung, type = "0_1")
+normalized$S_Bedeckung <- normalizeData(strompreise$S_Bedeckung, type = "0_1")
+normalized$D_Windgeschwindigkeit <- normalizeData(strompreise$D_Windgeschwindigkeit, type = "0_1")
+normalized$M_Windgeschwindigkeit <- normalizeData(strompreise$M_Windgeschwindigkeit, type = "0_1")
+normalized$S_Windgeschwindigkeit <- normalizeData(strompreise$S_Windgeschwindigkeit, type = "0_1")
+normalized$Globalstrahlung <- normalizeData(strompreise$Globalstrahlung, type = "0_1")
+normalized$Strompreis <- normalizeData(strompreise$Strompreis, type = "0_1")
+normalized$prevPreis <- normalizeData(strompreise$prevPreis, type = "0_1")
+normalized$pprevPreis <- normalizeData(strompreise$pprevPreis, type = "0_1")
+normalized$ppprevPreis <- normalizeData(strompreise$ppprevPreis, type = "0_1")
+normalized$pppprevPreis <- normalizeData(strompreise$pppprevPreis, type = "0_1")
+# Bind columns to matrix.
+converted <- cbind(#normalized$Jahresstunde, 
+                   #normalized$Monat,
+                   #normalized$Tag,
+                   #normalized$Stunde,
+                   #normalized$Woche,
+                   #normalized$Wochentag,
+                   normalized$D_Temperatur,
+                   normalized$M_Temperatur,
+                   normalized$S_Temperatur,
+                   normalized$D_Bedeckung,
+                   normalized$M_Bedeckung,
+                   normalized$S_Bedeckung,
+                   normalized$D_Windgeschwindigkeit,
+                   normalized$M_Windgeschwindigkeit,
+                   normalized$S_Windgeschwindigkeit,
+                   normalized$Globalstrahlung,
+                   normalized$Strompreis,
+                   normalized$prevPreis,
+                   normalized$pprevPreis,
+                   normalized$ppprevPreis,
+                   normalized$pppprevPreis)
+# Covert matrix to data frame.
+dataframe <- as.data.frame(converted)
+# Rename columns.
+#colnames(dataframe) <- c("Monat", "Tag", "Stunde", "Woche", "Wochentag", "Temperatur", "Bedeckung", "Windgeschwindigkeit", "Globalstrahlung", "Strompreis", "prevPreis", "pprevPreis")
+colnames(dataframe) <- c("D_Temperatur", "M_Temperatur", "S_Temperatur", "D_Bedeckung", "M_Bedeckung", "S_Bedeckung", "D_Windgeschwindigkeit", "M_Windgeschwindigkeit", "S_Windgeschwindigkeit", "Globalstrahlung","Strompreis", "prevPreis", "pprevPreis", "ppprevPreis", "pppprevPreis")
+
+inputs <- dataframe
+inputs$Strompreis <- NULL
+targets <- dataframe$Strompreis
+
+splitdata <- splitForTrainingAndTest(inputs, targets, ratio=0.5)
+```
+
+## Model and analysis
+Fit the model. mlp allows to put test data in as well and will test the mlp itself. 
+
+Configure the size at your choice.
+```{r}
+model <- mlp(splitdata$inputsTrain,
+             splitdata$targetsTrain,
+             size=c(15,20,10),
+             maxit=200,
+             #hiddenActFunc = "Act_Elliott",
+             inputsTest=splitdata$inputsTest,
+             targetsTest=splitdata$targetsTest)
+model
+plotIterativeError(model)
+#plotRegressionError(model)
+```
+
+## Prediction
+## 1h
+Taken from prefitted data.
+```{r}
+prediction <- denormalizeData(model$fittedTestValues,
+                              getNormParameters(normalized$Strompreis))
+realTest <- denormalizeData(splitdata$targetsTest,
+                            getNormParameters(normalized$Strompreis))
+result <- cbind(prediction,realTest)
+resultdiff <- prediction - realTest
+result
+plot(result)
+plot(resultdiff)
+
+sum((realTest - prediction)^2) / length(realTest)
+```
+
+## Continous 24h
+```{r}
+continous24 <- as.data.frame(splitdata$inputsTest)
+continous24result <- NULL
+continous24result$real <- denormalizeData(splitdata$targetsTest,
+                                    getNormParameters(normalized$Strompreis))
+for(i in 1:24)
+{
+  raw_i <- paste("raw", i)
+  pred_i <- paste("pred", i)
+  result_i <- paste("result", i)
+  diff_i <- paste("diff", i)
+  abs_i <- paste("abs", i)
+  sum_i <- paste("sum", i)
+  continous24result[[pred_i]] <- denormalizeData(predict(model, continous24),
+                                        getNormParameters(normalized$Strompreis)) 
+  continous24result[[result_i]] <- cbind(continous24result[[pred_i]], continous24result$real)
+  continous24result[[diff_i]] <- continous24result$real - continous24result[[pred_i]]
+  continous24result[[abs_i]] <- abs(continous24result[[diff_i]])
+  continous24result[[sum_i]] <- sum(continous24result[[diff_i]]^2) / length(continous24result[[diff_i]])
+  continous24result[[result_i]]
+  #plot(continous24result[[pred_i]])
+  plot(continous24result[[result_i]])
+  #plot(continous24result[[diff_i]])
+  #plot(continous24result[[abs_i]])
+  
+  # Shift previous prices.
+  continous24$pppprevPreis <- continous24$ppprevPreis
+  continous24$ppprevPreis <- continous24$pprevPreis
+  continous24$pprevPreis <- continous24$prevPreis
+  # IMPORTANT: denormalize output and normalize input, as different paramters might be used.
+  continous24$prevPreis <- normalizeData(continous24result[[pred_i]], getNormParameters(normalized$prevPreis))
+}
+```
+## Single 24h
+```{r}
+output24 <- NULL
+input24 <- splitdata$inputsTest
+
+start <- 0
+end <- 120
+input24 <- splitdata$inputsTest[start:(end+3),]
+for(i in 1:(end-start))
+{
+  output <- predict(model, input24[i,])
+  output24[i-start] <- output
+  input24[i+1,"prevPreis"] <- output
+  input24[i+2,"pprevPreis"] <- output
+  input24[i+3,"ppprevPreis"] <- output
+  input24[i+4,"ppprevPreis"] <- output
+}
+
+prediction24 <- denormalizeData(output24,
+                                getNormParameters(normalized$Strompreis))
+
+realTest24 <- denormalizeData(splitdata$targetsTest[1:(end-start)],
+                              getNormParameters(normalized$Strompreis)) 
+result24 <- cbind(prediction24,realTest24)
+result24diff <- realTest24 - prediction24
+result24diffabs <- abs(result24diff)
+result24
+plot(result24)
+plot(result24diff)
+plot(result24diffabs)
+
+sum((realTest24 - prediction24)^2) / length(prediction24)
+```
+
+Clean up.
+```{r message=FALSE}
+remove(strompreise)
+remove(normalized)
+remove(converted)
+remove(dataframe)
+remove(inputs)
+remove(splitdata)
+remove(model)
+remove(prediction)
+remove(realTest)
+remove(targets)
+remove(result)
+```
